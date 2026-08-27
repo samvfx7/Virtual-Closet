@@ -1,0 +1,7 @@
+{
+  "name": "VirtualCloset",
+  "description": "Interactive 3D wardrobe, AI outfit generation, and fashion styling powered by Gemini",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

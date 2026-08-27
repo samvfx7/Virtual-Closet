@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>VirtualCloset 3D Minimalist Scene</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #000000; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Sora", sans-serif; }
+    #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    
+    .selected-tag {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #00D9FF;
+      color: #000000;
+      padding: 6px 18px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      box-shadow: 0 0 25px rgba(0, 217, 255, 0.7);
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .selected-tag.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(4px);
+    }
+  </style>
+  <script src="three.min.js"></script>
+  <script src="OrbitControls.js"></script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div class="selected-tag" id="selected-tag">Selected Item</div>
+
+  <script>
+    let scene, camera, renderer, controls;
+    let clothingMeshes = [];
+    let lights = {};
+    let raycaster, mouse;
+    let selectedMesh = null;
+    let currentCategory = 'ALL';
+    let clock = new THREE.Clock();
+    let wardrobeItems = [];
+
+    function init() {
+      const container = document.getElementById('canvas-container');
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      // 1. Scene setup: Pure Black
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000000);
+      scene.fog = new THREE.FogExp2(0x000000, 0.05);
+
+      // 2. Camera setup
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.set(0, 1.2, 5.2);
+
+      // 3. Renderer setup
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.appendChild(renderer.domElement);
+
+      // 4. Orbit Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI / 2 - 0.02;
+      controls.minDistance = 1.8;
+      controls.maxDistance = 8.0;
+      controls.target.set(0, 0.8, 0);
+
+      // 5. Lighting: Subtle warm with Neon Blue accents
+      setupLighting();
+
+      // 6. Brutalist Minimal Closet Architecture
+      buildClosetArchitecture();
+
+      // 7. Raycasting & Interaction
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2();
+
+      renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+      window.addEventListener('resize', onWindowResize, false);
+
+      animate();
+    }
+
+    function setupLighting() {
+      // Subtle ambient
+      lights.ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(lights.ambient);
+
+      // Main Top Downlight
+      lights.main = new THREE.SpotLight(0xffffff, 2.2, 16, Math.PI / 3.2, 0.3, 1.2);
+      lights.main.position.set(0, 5.0, 2.2);
+      lights.main.castShadow = true;
+      scene.add(lights.main);
+
+      // Neon Blue Accent Rim Light
+      lights.neonAccent = new THREE.PointLight(0x00D9FF, 1.6, 9);
+      lights.neonAccent.position.set(0, 2.0, 0.5);
+      scene.add(lights.neonAccent);
+
+      // Subtle warm fill
+      lights.warmFill = new THREE.PointLight(0xFFE8D6, 0.8, 8);
+      lights.warmFill.position.set(-2.5, 1.8, 1.0);
+      scene.add(lights.warmFill);
+    }
+
+    function buildClosetArchitecture() {
+      const darkMat = new THREE.MeshStandardMaterial({
+        color: 0x0A0A0A,
+        roughness: 0.7,
+        metalness: 0.2
+      });
+
+      const neonMat = new THREE.MeshStandardMaterial({
+        color: 0x00D9FF,
+        emissive: 0x00D9FF,
+        emissiveIntensity: 0.3,
+        roughness: 0.2,
+        metalness: 0.8
+      });
+
+      const glassShelfMat = new THREE.MeshPhysicalMaterial({
+        color: 0x111111,
+        transparent: true,
+        opacity: 0.6,
+        roughness: 0.1,
+        metalness: 0.2,
+        transmission: 0.7
+      });
+
+      // 1. Floor: Pure Black Matte with subtle grid
+      const floorGeo = new THREE.PlaneGeometry(14, 14);
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8, metalness: 0.1 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      const grid = new THREE.GridHelper(10, 20, 0x00D9FF, 0x1A1A1A);
+      grid.position.y = 0.001;
+      grid.material.opacity = 0.2;
+      grid.material.transparent = true;
+      scene.add(grid);
+
+      // 2. Minimal Back Wall
+      const backWallGeo = new THREE.BoxGeometry(6.6, 4.2, 0.1);
+      const backWall = new THREE.Mesh(backWallGeo, darkMat);
+      backWall.position.set(0, 1.8, -1.5);
+      backWall.receiveShadow = true;
+      scene.add(backWall);
+
+      // Pillars
+      const pillarGeo = new THREE.BoxGeometry(0.1, 4.2, 1.8);
+      const leftPillar = new THREE.Mesh(pillarGeo, darkMat);
+      leftPillar.position.set(-3.3, 1.8, -0.6);
+      scene.add(leftPillar);
+
+      const rightPillar = new THREE.Mesh(pillarGeo, darkMat);
+      rightPillar.position.set(3.3, 1.8, -0.6);
+      scene.add(rightPillar);
+
+      // Divider
+      const centerPillar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 4.2, 1.6), darkMat);
+      centerPillar.position.set(0.6, 1.8, -0.7);
+      scene.add(centerPillar);
+
+      // 3. Hanging Rod (Left Section)
+      const rodGeo = new THREE.CylinderGeometry(0.02, 0.02, 3.8, 16);
+      const rod = new THREE.Mesh(rodGeo, neonMat);
+      rod.rotation.z = Math.PI / 2;
+      rod.position.set(-1.3, 2.5, -0.8);
+      rod.castShadow = true;
+      scene.add(rod);
+
+      // 4. Shelves (Right Section)
+      for (let y = 1.0; y <= 3.2; y += 0.7) {
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.03, 1.3), glassShelfMat);
+        shelf.position.set(1.9, y, -0.8);
+        shelf.castShadow = true;
+        shelf.receiveShadow = true;
+        scene.add(shelf);
+
+        // Neon Blue edge trim
+        const trim = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.01, 0.02), neonMat);
+        trim.position.set(1.9, y - 0.015, -0.15);
+        scene.add(trim);
+      }
+
+      // 5. Drawer Box
+      const drawerBox = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.5, 1.2), darkMat);
+      drawerBox.position.set(-1.3, 0.4, -0.8);
+      scene.add(drawerBox);
+    }
+
+    function createClothingTexture(item, isSelected) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 768;
+      const ctx = canvas.getContext('2d');
+
+      // Base solid color
+      ctx.fillStyle = item.colorHex || '#1F2937';
+      ctx.fillRect(0, 0, 512, 768);
+
+      // Minimalist texture patterns
+      if (item.pattern === 'striped') {
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        for (let y = 0; y < 768; y += 32) {
+          ctx.fillRect(0, y, 512, 16);
+        }
+      } else if (item.pattern === 'knit') {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        for (let x = 0; x < 512; x += 16) {
+          for (let y = 0; y < 768; y += 16) {
+            if ((x + y) % 32 === 0) ctx.fillRect(x, y, 8, 8);
+          }
+        }
+      }
+
+      // Subtle lighting gradient
+      const gradient = ctx.createLinearGradient(0, 0, 512, 0);
+      gradient.addColorStop(0, 'rgba(0,0,0,0.3)');
+      gradient.addColorStop(0.5, 'rgba(255,255,255,0.12)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.4)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 512, 768);
+
+      // Brutalist Border: Neon Blue if selected, subtle white otherwise
+      ctx.strokeStyle = isSelected ? '#00D9FF' : '#333333';
+      ctx.lineWidth = isSelected ? 16 : 8;
+      ctx.strokeRect(4, 4, 504, 760);
+
+      // Typography Card Label (Clean Brutalist Sans)
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(16, 610, 480, 142);
+
+      ctx.fillStyle = '#00D9FF';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText((item.category || 'ITEM').toUpperCase(), 32, 650);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 28px sans-serif';
+      const truncatedName = item.name.length > 20 ? item.name.substring(0, 18) + '...' : item.name;
+      ctx.fillText(truncatedName.toUpperCase(), 32, 694);
+
+      ctx.fillStyle = '#8A8A8A';
+      ctx.font = '20px sans-serif';
+      ctx.fillText((item.primaryColorName || '').toUpperCase() + ' • ' + (item.styleType || '').toUpperCase(), 32, 730);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = 4;
+      return texture;
+    }
+
+    function populateWardrobe(items) {
+      wardrobeItems = items;
+      clothingMeshes.forEach(mesh => scene.remove(mesh));
+      clothingMeshes = [];
+
+      let rodIndex = 0;
+      let shelf1Index = 0;
+      let shelf2Index = 0;
+      let shelf3Index = 0;
+      let drawerIndex = 0;
+
+      items.forEach((item, index) => {
+        const texture = createClothingTexture(item, false);
+        const mat = new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.4,
+          metalness: 0.1,
+          side: THREE.DoubleSide
+        });
+
+        let geo, mesh;
+        let posX = 0, posY = 0, posZ = 0;
+        let rotY = 0;
+
+        if (item.category === 'TOPS' || item.category === 'DRESSES' || item.category === 'OUTERWEAR') {
+          geo = new THREE.PlaneGeometry(0.5, 0.78);
+          mesh = new THREE.Mesh(geo, mat);
+          
+          const rodStart = -2.8;
+          const rodSpacing = 0.38;
+          posX = rodStart + (rodIndex * rodSpacing);
+          posY = (item.category === 'DRESSES' || item.category === 'OUTERWEAR') ? 1.95 : 2.05;
+          posZ = -0.8;
+          rotY = (Math.PI / 6) * 0.35;
+
+          // Hanger
+          const hanger = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.008, 0.008, 0.38, 8),
+            new THREE.MeshStandardMaterial({ color: 0x00D9FF, metalness: 0.8, emissive: 0x00D9FF, emissiveIntensity: 0.2 })
+          );
+          hanger.rotation.z = Math.PI / 2;
+          hanger.position.y = 0.41;
+          mesh.add(hanger);
+
+          mesh.userData.swaySpeed = 1.1 + (index % 5) * 0.2;
+          mesh.userData.swayOffset = index * 0.8;
+          mesh.userData.isHanging = true;
+          rodIndex++;
+        } else if (item.category === 'BOTTOMS' || item.category === 'SHOES') {
+          geo = new THREE.BoxGeometry(0.48, 0.12, 0.36);
+          mesh = new THREE.Mesh(geo, mat);
+
+          if (shelf1Index < 3) {
+            posX = 1.0 + (shelf1Index * 0.65);
+            posY = 1.1;
+            posZ = -0.8;
+            shelf1Index++;
+          } else if (shelf2Index < 3) {
+            posX = 1.0 + (shelf2Index * 0.65);
+            posY = 1.8;
+            posZ = -0.8;
+            shelf2Index++;
+          } else {
+            posX = 1.0 + (shelf3Index * 0.65);
+            posY = 2.5;
+            posZ = -0.8;
+            shelf3Index++;
+          }
+        } else {
+          geo = new THREE.BoxGeometry(0.34, 0.08, 0.28);
+          mesh = new THREE.Mesh(geo, mat);
+          posX = -2.6 + (drawerIndex * 0.48);
+          posY = 0.72;
+          posZ = -0.8;
+          drawerIndex++;
+        }
+
+        mesh.position.set(posX, posY, posZ);
+        mesh.rotation.y = rotY;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        mesh.userData.item = item;
+        scene.add(mesh);
+        clothingMeshes.push(mesh);
+      });
+
+      filterCategory(currentCategory);
+    }
+
+    function filterCategory(category) {
+      currentCategory = category;
+      clothingMeshes.forEach(mesh => {
+        const item = mesh.userData.item;
+        if (!item) return;
+        const matches = (category === 'ALL' || item.category === category);
+        mesh.visible = matches;
+      });
+    }
+
+    function onPointerDown(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(clothingMeshes, true);
+
+      if (intersects.length > 0) {
+        let hit = intersects[0].object;
+        while (hit.parent && hit.parent !== scene) {
+          hit = hit.parent;
+        }
+
+        if (hit && hit.userData && hit.userData.item) {
+          selectItem(hit);
+        }
+      }
+    }
+
+    function selectItem(mesh) {
+      if (selectedMesh && selectedMesh !== mesh) {
+        selectedMesh.scale.set(1, 1, 1);
+        if (selectedMesh.material) {
+          selectedMesh.material.map = createClothingTexture(selectedMesh.userData.item, false);
+          selectedMesh.material.needsUpdate = true;
+        }
+      }
+
+      selectedMesh = mesh;
+      selectedMesh.scale.set(1.15, 1.15, 1.15);
+      if (selectedMesh.material) {
+        selectedMesh.material.map = createClothingTexture(selectedMesh.userData.item, true);
+        selectedMesh.material.needsUpdate = true;
+      }
+
+      const item = mesh.userData.item;
+      const tag = document.getElementById('selected-tag');
+      if (tag) {
+        tag.innerText = item.name + ' [' + item.category + ']';
+        tag.classList.add('show');
+        setTimeout(() => tag.classList.remove('show'), 2200);
+      }
+
+      // Smooth camera transition towards item
+      controls.target.set(mesh.position.x, mesh.position.y, mesh.position.z);
+
+      if (window.AndroidBridge && window.AndroidBridge.onClothingItemSelected) {
+        window.AndroidBridge.onClothingItemSelected(item.id);
+      }
+    }
+
+    function onWindowResize() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const time = clock.getElapsedTime();
+
+      clothingMeshes.forEach(mesh => {
+        if (mesh.userData.isHanging && mesh.visible) {
+          const speed = mesh.userData.swaySpeed || 1.0;
+          const offset = mesh.userData.swayOffset || 0;
+          mesh.rotation.z = Math.sin(time * speed + offset) * 0.035;
+        }
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.loadWardrobeData = function(data) {
+      try {
+        const items = (typeof data === 'string') ? JSON.parse(data) : data;
+        populateWardrobe(items || []);
+      } catch (e) {
+        console.error("Error loading wardrobe in 3D", e);
+      }
+    };
+
+    window.setCategoryFilter = function(category) {
+      filterCategory(category);
+    };
+
+    window.resetCamera = function() {
+      camera.position.set(0, 1.2, 5.2);
+      controls.target.set(0, 0.8, 0);
+    };
+
+    window.onload = init;
+  </script>
+</body>
+</html>
